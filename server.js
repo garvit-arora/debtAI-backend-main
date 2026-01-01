@@ -6,16 +6,20 @@ import { AzureOpenAI } from "openai";
 dotenv.config();
 
 const app = express();
-const port = 8080;
+
+// CRITICAL FIX: Use Azure's assigned port, or 8080 for local testing
+const port = process.env.PORT || 8080; 
 
 app.use(cors());
 app.use(express.json());
+
 const endpoint = "https://garvi-mjhusphu-eastus2.cognitiveservices.azure.com/"; 
 const deployment = "debt-ai-openai";
 const apiVersion = "2024-02-15-preview";
-const apiKey = process.env.AZURE_OPENAI_API_KEY;
+const apiKey = process.env.AZURE_OPENAI_API_KEY; 
   
 const client = new AzureOpenAI({ endpoint, apiKey, deployment, apiVersion });
+
 app.post("/chat", async (req, res) => {
   try {
     const { prompt, userData } = req.body; 
@@ -41,10 +45,8 @@ app.post("/chat", async (req, res) => {
     res.status(500).json({ error: "Failed to connect to AI" });
   }
 });
-app.listen(port, () => {
-  console.log(` Server ready at http://localhost:${port}`);
-  console.log(` Listening for frontend requests...`);
-});
-app.listen(8080, '0.0.0.0', () => {
-    console.log("Server is running on port 8080");
+
+// CRITICAL FIX: Only listen ONCE, and bind to 0.0.0.0 for Azure Linux
+app.listen(port, '0.0.0.0', () => {
+    console.log(`Server is running on port ${port}`);
 });

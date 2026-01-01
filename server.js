@@ -24,14 +24,18 @@ app.post("/chat", async (req, res) => {
   try {
     const { prompt, userData } = req.body;
     
+    // Log the prompt to the server console for debugging
+    console.log("Received User Prompt:", prompt);
+
     // Calculate financial context
     const monthlyIncome = parseFloat(userData?.income || 0);
     const monthlyExpenses = parseFloat(userData?.expenses || 0);
     const disposableIncome = monthlyIncome - monthlyExpenses;
 
-    // --- UPDATED SYSTEM PROMPT (Safer Language for Filters) ---
+    // --- UPDATED SYSTEM PROMPT ---
+    // Now includes the 'prompt' inside the Context section as requested
     const systemContent = `
-    ### SYSTEM IDENTITY: "DEBT_ARCHITECT_PRIME"
+    ### SYSTEM IDENTITY: "DEBT_AI"
     
     ## 1. WHO YOU ARE
     You are **DebtArchitect Prime**, a highly advanced financial strategist and behavioral economist. You possess the combined knowledge of:
@@ -48,6 +52,7 @@ app.post("/chat", async (req, res) => {
     - **Net Cash Flow:** $${disposableIncome}
     - **Selected Strategy:** ${userData?.strategy || "Undecided"}
     - **Primary Goal:** ${userData?.goal || "Financial Freedom"}
+    - **CURRENT REQUEST:** "${prompt}"
 
     ## 3. DEBT DATA
     ${JSON.stringify(userData?.debts || [], null, 2)}
@@ -93,14 +98,13 @@ app.post("/chat", async (req, res) => {
     Analyze the data and provide the solution.
     `;
 
-    // Call Azure OpenAI
     const response = await client.chat.completions.create({
       model: deployment,
       messages: [
         { role: "system", content: systemContent },
-        { role: "user", content: prompt } // This sends the user prompt to AI
+        { role: "user", content: prompt } 
       ],
-      max_completion_tokens: 800
+      max_completion_tokens: 1000
     });
 
     console.log("AI responded to user");
@@ -110,14 +114,14 @@ app.post("/chat", async (req, res) => {
         console.log("!!! BLOCKED BY CONTENT FILTER !!!");
         return res.json({ 
             reply: "My response was blocked by safety filters. Please try rephrasing.",
-            userPrompt: prompt // Sending prompt back for debugging
+            userPrompt: prompt 
         });
     }
 
-    // Send success response
+    // Send success response with the prompt included for frontend debugging
     res.json({ 
         reply: response.choices[0].message.content,
-        userPrompt: prompt // <--- Added per your request: Sending the prompt back!
+        userPrompt: prompt 
     });
 
   } catch (error) {

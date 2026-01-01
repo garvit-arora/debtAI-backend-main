@@ -45,3 +45,6 @@ app.listen(port, () => {
   console.log(` Server ready at http://localhost:${port}`);
   console.log(` Listening for frontend requests...`);
 });
+app.listen(8080, '0.0.0.0', () => {
+    console.log("Server is running on port 8080");
+});

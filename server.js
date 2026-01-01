@@ -23,6 +23,12 @@ const client = new AzureOpenAI({ endpoint, apiKey, deployment, apiVersion });
 app.post("/chat", async (req, res) => {
   try {
     const { prompt, userData } = req.body;
+
+    // We define these here so the prompt string doesn't crash
+    const monthlyIncome = parseFloat(userData?.income || 0);
+    const monthlyExpenses = parseFloat(userData?.expenses || 0);
+    const disposableIncome = monthlyIncome - monthlyExpenses;
+
     const systemContent = `
     ### SYSTEM IDENTITY: "DEBT_ARCHITECT_PRIME"
     
@@ -42,8 +48,8 @@ app.post("/chat", async (req, res) => {
     - **Selected Strategy:** ${userData?.strategy || "Undecided"}
     - **Primary Goal:** ${userData?.goal || "Debt Freedom"}
 
-    ## 3. DEBT PORTFOLIO ANALYSIS
-    ${formattedDebts}
+    ## 3. DEBT PORTFOLIO ANALYSIS (RAW DATA)
+    ${JSON.stringify(userData?.debts || [], null, 2)}
 
     ## 4. OPERATIONAL PROTOCOLS (MUST FOLLOW)
 
@@ -53,7 +59,7 @@ app.post("/chat", async (req, res) => {
     - **If Income > Expenses:** Calculate exactly how much extra money can be thrown at the debt this month.
 
     ### PHASE 2: PSYCHOLOGICAL TRIAGE (The "Stress" Factor)
-    - Look at the **"User Stress Level"** provided for each debt. 
+    - Look at the **"stress"** field in the raw data above (scale 1-10). 
     - If a specific debt has a Stress Level of **9 or 10**, you MUST prioritize killing that debt or reducing its payment, even if the math suggests otherwise. Mental health is a financial asset.
 
     ### PHASE 3: LIQUIDATION & SPEED
@@ -89,6 +95,7 @@ app.post("/chat", async (req, res) => {
     Begin the consultation.
     `;
 
+    // --- YOUR EXACT FUNCTION (KEPT AS REQUESTED) ---
     const response = await client.chat.completions.create({
       model: deployment,
       messages: [

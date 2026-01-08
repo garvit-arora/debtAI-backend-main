@@ -32,13 +32,11 @@ app.post("/chat", async (req, res) => {
     const monthlyExpenses = parseFloat(userData?.expenses || 0);
     const disposableIncome = monthlyIncome - monthlyExpenses;
 
-    // --- UPDATED SYSTEM PROMPT ---
-    // Now includes the 'prompt' inside the Context section as requested
     const systemContent = `
     ### SYSTEM IDENTITY: "DEBT_AI"
     
     ## 1. WHO YOU ARE
-    You are **DebtArchitect Prime**, a highly advanced financial strategist and behavioral economist. You possess the combined knowledge of:
+    You are **Debt AI**, a highly advanced financial strategist and behavioral economist. You possess the combined knowledge of:
     - **Legal Frameworks:** US Bankruptcy Code (Chapter 7/13), Consumer Credit Protection Act.
     - **Financial Literature:** "The Total Money Makeover" (Ramsey), "I Will Teach You To Be Rich" (Sethi).
     - **Mathematical Models:** Amortization schedules and liquidity ratios.
@@ -47,9 +45,9 @@ app.post("/chat", async (req, res) => {
 
     ## 2. USER CONTEXT
     - **Name:** ${userData?.name || "Client"}
-    - **Monthly Income:** $${monthlyIncome}
-    - **Monthly Expenses:** $${monthlyExpenses}
-    - **Net Cash Flow:** $${disposableIncome}
+    - **Monthly Income:** ₹${monthlyIncome}
+    - **Monthly Expenses:** ₹${monthlyExpenses}
+    - **Net Cash Flow:** ₹${disposableIncome}
     - **Selected Strategy:** ${userData?.strategy || "Undecided"}
     - **Primary Goal:** ${userData?.goal || "Financial Freedom"}
     - **CURRENT REQUEST:** "${prompt}"
@@ -95,9 +93,11 @@ app.post("/chat", async (req, res) => {
     - **Direct:** Be clear and concise.
     - **Empathetic:** Validate the user's situation.
 
-    Analyze the data and provide the solution.
+    Analyze the data and provide the solution. Also give user the daily habit to follow to liquidify the debt easily with least interest and least amount paid and more profit gained.
     `;
 
+    // ---------------- OLD CODE (COMMENTED OUT) ----------------
+    /*
     const response = await client.chat.completions.create({
       model: deployment,
       messages: [
@@ -123,10 +123,55 @@ app.post("/chat", async (req, res) => {
         reply: response.choices[0].message.content,
         userPrompt: prompt 
     });
+    */
+    // -----------------------------------------------------------
+
+    // ---------------- NEW STREAMING IMPLEMENTATION ----------------
+    
+    // 1. Set headers to tell the client this is a stream
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+
+    console.log("Starting stream for user...");
+
+    // 2. Call Azure OpenAI with stream: true
+    const stream = await client.chat.completions.create({
+      model: deployment,
+      messages: [
+        { role: "system", content: systemContent },
+        { role: "user", content: prompt } 
+      ],
+      max_completion_tokens: 1000,
+      stream: true, // <--- ENABLE STREAMING
+    });
+
+    // 3. Iterate through chunks and send immediately
+    for await (const chunk of stream) {
+        // Safety check inside stream
+        if (chunk.choices[0]?.finish_reason === "content_filter") {
+            res.write("\n[Response blocked by safety filters]");
+            break;
+        }
+
+        const content = chunk.choices[0]?.delta?.content || "";
+        if (content) {
+            res.write(content); // Send data to frontend immediately
+        }
+    }
+
+    res.end(); // Close the stream
+    // --------------------------------------------------------------
 
   } catch (error) {
     console.error("Route Error:", error.message);
-    res.status(500).json({ error: "Failed to connect to AI" });
+    
+    // If headers haven't been sent yet, send a JSON error.
+    // If streaming already started, we can't send JSON, so we just end the response.
+    if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to connect to AI" });
+    } else {
+        res.end();
+    }
   }
 });
 

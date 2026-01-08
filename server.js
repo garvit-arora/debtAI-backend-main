@@ -32,8 +32,6 @@ app.post("/chat", async (req, res) => {
     const monthlyExpenses = parseFloat(userData?.expenses || 0);
     const disposableIncome = monthlyIncome - monthlyExpenses;
 
-    // --- UPDATED SYSTEM PROMPT ---
-    // Now includes the 'prompt' inside the Context section as requested
     const systemContent = `
     ### SYSTEM IDENTITY: "DEBT_AI"
     
@@ -47,9 +45,9 @@ app.post("/chat", async (req, res) => {
 
     ## 2. USER CONTEXT
     - **Name:** ${userData?.name || "Client"}
-    - **Monthly Income:** $${monthlyIncome}
-    - **Monthly Expenses:** $${monthlyExpenses}
-    - **Net Cash Flow:** $${disposableIncome}
+    - **Monthly Income:** ₹${monthlyIncome}
+    - **Monthly Expenses:** ₹${monthlyExpenses}
+    - **Net Cash Flow:** ₹${disposableIncome}
     - **Selected Strategy:** ${userData?.strategy || "Undecided"}
     - **Primary Goal:** ${userData?.goal || "Financial Freedom"}
     - **CURRENT REQUEST:** "${prompt}"

@@ -22,156 +22,117 @@ const client = new AzureOpenAI({ endpoint, apiKey, deployment, apiVersion });
 
 app.post("/chat", async (req, res) => {
   try {
-    const { prompt, userData } = req.body;
+    const { prompt, userData, messages } = req.body;
     
-    // Log the prompt to the server console for debugging
     console.log("Received User Prompt:", prompt);
 
-    // Calculate financial context
     const monthlyIncome = parseFloat(userData?.income || 0);
     const monthlyExpenses = parseFloat(userData?.expenses || 0);
     const disposableIncome = monthlyIncome - monthlyExpenses;
 
     const systemContent = `
     ### SYSTEM IDENTITY: "DEBT_AI"
+    You are Debt AI, a highly professional financial strategist.
     
-    ## 1. WHO YOU ARE
-    You are **Debt AI**, a highly advanced financial strategist and behavioral economist. You possess the combined knowledge of:
-    - **Legal Frameworks:** US Bankruptcy Code (Chapter 7/13), Consumer Credit Protection Act.
-    - **Financial Literature:** "The Total Money Makeover" (Ramsey), "I Will Teach You To Be Rich" (Sethi).
-    - **Mathematical Models:** Amortization schedules and liquidity ratios.
-
-    You do not offer generic advice. You provide **mathematically precise, actionable, and psychology-aware plans.** You are a dedicated advocate for the user's financial well-being.
-
-    ## 2. USER CONTEXT
-    - **Name:** ${userData?.name || "Client"}
-    - **Monthly Income:** ₹${monthlyIncome}
-    - **Monthly Expenses:** ₹${monthlyExpenses}
-    - **Net Cash Flow:** ₹${disposableIncome}
-    - **Selected Strategy:** ${userData?.strategy || "Undecided"}
-    - **Primary Goal:** ${userData?.goal || "Financial Freedom"}
-    - **CURRENT REQUEST:** "${prompt}"
-
-    ## 3. DEBT DATA
-    ${JSON.stringify(userData?.debts || [], null, 2)}
-
-    ## 4. PROTOCOLS
-
-    ### PHASE 1: ANALYSIS
-    - Compare Income vs. Expenses. 
-    - If Expenses > Income, advise immediate budget restructuring and halting non-essential spending.
-    - If Income > Expenses, calculate the surplus available for debt repayment.
-
-    ### PHASE 2: PRIORITIZATION
-    - Review the **"stress"** level (1-10). 
-    - If a debt has Stress > 8, prioritize resolving it to improve the user's mental well-being, even if it is not the highest interest rate.
-
-    ### PHASE 3: ACTION
-    - Suggest specific methods:
-      - **Consolidation:** Moving high-interest debt to lower-rate options.
-      - **Asset Liquidation:** Selling items to clear small debts quickly.
-      - **Hardship Plans:** Contacting lenders to request temporary rate reductions.
-
-    ## 5. OUTPUT FORMAT (Markdown)
+    USER CONTEXT:
+    - Name: ${userData?.name || "Client"}
+    - Net Cash Flow: ₹${disposableIncome}
     
-    **1. The Diagnosis** (A clear summary of their financial health.)
-
-    **2. The Numbers**
-    (Total debt load and estimated time to freedom.)
-
-    **3. The Strategy**
-    (Snowball vs. Avalanche vs. Hybrid. Explain the choice.)
-
-    **4. Immediate Actions**
-    (3 specific bullet points to generate cash or lower rates.)
-
-    **5. 7-Day Plan**
-    (A step-by-step checklist for the next week.)
-
-    ## 6. TONE
-    - **Professional:** You are an expert.
-    - **Direct:** Be clear and concise.
-    - **Empathetic:** Validate the user's situation.
-
-    Analyze the data and provide the solution. Also give user the daily habit to follow to liquidify the debt easily with least interest and least amount paid and more profit gained.
+    PROTOCOLS:
+    - ALWAYS provide concise, professional answers.
+    - Use proper sentence case and punctuation.
+    - NEVER use all-caps or all-lowercase.
+    - Use markdown bullet points and clear headings.
+    - Focus on immediate, actionable mathematical steps.
+    
+    TONE: Institutional, Direct, Empathetic.
     `;
 
-    // ---------------- OLD CODE (COMMENTED OUT) ----------------
-    /*
-    const response = await client.chat.completions.create({
-      model: deployment,
-      messages: [
-        { role: "system", content: systemContent },
-        { role: "user", content: prompt } 
-      ],
-      max_completion_tokens: 1000
-    });
-
-    console.log("AI responded to user");
-
-    // Check for content filtering (Safety Check)
-    if (response.choices[0].finish_reason === "content_filter") {
-        console.log("!!! BLOCKED BY CONTENT FILTER !!!");
-        return res.json({ 
-            reply: "My response was blocked by safety filters. Please try rephrasing.",
-            userPrompt: prompt 
-        });
-    }
-
-    // Send success response with the prompt included for frontend debugging
-    res.json({ 
-        reply: response.choices[0].message.content,
-        userPrompt: prompt 
-    });
-    */
-    // -----------------------------------------------------------
-
-    // ---------------- NEW STREAMING IMPLEMENTATION ----------------
-    
-    // 1. Set headers to tell the client this is a stream
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
     res.setHeader('Transfer-Encoding', 'chunked');
 
-    console.log("Starting stream for user...");
-
-    // 2. Call Azure OpenAI with stream: true
     const stream = await client.chat.completions.create({
       model: deployment,
       messages: [
         { role: "system", content: systemContent },
+        ...(messages || []),
         { role: "user", content: prompt } 
       ],
-      max_completion_tokens: 1000,
-      stream: true, // <--- ENABLE STREAMING
+      max_completion_tokens: 1500,
+      stream: true,
     });
 
-    // 3. Iterate through chunks and send immediately
     for await (const chunk of stream) {
-        // Safety check inside stream
         if (chunk.choices[0]?.finish_reason === "content_filter") {
             res.write("\n[Response blocked by safety filters]");
             break;
         }
-
         const content = chunk.choices[0]?.delta?.content || "";
-        if (content) {
-            res.write(content); // Send data to frontend immediately
-        }
+        if (content) res.write(content);
     }
-
-    res.end(); // Close the stream
-    // --------------------------------------------------------------
-
+    res.end();
   } catch (error) {
     console.error("Route Error:", error.message);
+    if (!res.headersSent) res.status(500).json({ error: "Failed to connect to AI" });
+    else res.end();
+  }
+});
+
+app.post("/wealth-chat", async (req, res) => {
+  try {
+    const { prompt, userData, messages } = req.body;
     
-    // If headers haven't been sent yet, send a JSON error.
-    // If streaming already started, we can't send JSON, so we just end the response.
-    if (!res.headersSent) {
-        res.status(500).json({ error: "Failed to connect to AI" });
-    } else {
-        res.end();
+    console.log("Received Wealth Hub Prompt:", prompt);
+
+    const systemContent = `
+    ### SYSTEM IDENTITY: "WEALTH_NEXUS"
+    You are Wealth Nexus, an elite institutional investment strategist and wealth architect.
+    
+    USER CONTEXT:
+    - Name: ${userData?.name || "Client"}
+    - Portfolio Context: Focused on wealth acceleration, compound growth, and strategic asset allocation.
+    
+    MISSION:
+    Provide institutional-grade investment insights, risk analysis, and financial strategy. 
+    You are an expert in global markets, portfolio theory, and alternative assets.
+
+    PROTOCOLS:
+    - Provide deep, concise intelligence.
+    - Focus on risk-adjusted returns (Alpha).
+    - Use sophisticated, professional language with proper punctuation.
+    - No fluff. No generic advice.
+    - Use markdown for structured analysis.
+    
+    OUTPUT STRUCTURE:
+    1. Intelligence Brief (What is happening)
+    2. Strategic Position (The way forward)
+    3. Alpha Drivers (Specific areas of growth)
+    4. Guardrails (Risk management)
+    `;
+
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('Transfer-Encoding', 'chunked');
+
+    const stream = await client.chat.completions.create({
+      model: deployment,
+      messages: [
+        { role: "system", content: systemContent },
+        ...(messages || []),
+        { role: "user", content: prompt } 
+      ],
+      max_completion_tokens: 2000,
+      stream: true,
+    });
+
+    for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || "";
+        if (content) res.write(content);
     }
+    res.end();
+  } catch (error) {
+    console.error("Wealth Route Error:", error.message);
+    if (!res.headersSent) res.status(500).json({ error: "Failed to connect to AI" });
+    else res.end();
   }
 });
 
